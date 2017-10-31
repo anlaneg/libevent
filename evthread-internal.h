@@ -115,6 +115,7 @@ extern int evthread_lock_debugging_enabled_;
 
 /** Lock an event_base, if it is set up for locking.  Acquires the lock
     in the base structure whose field is named 'lockvar'. */
+//加锁
 #define EVBASE_ACQUIRE_LOCK(base, lockvar) do {				\
 		EVLOCK_LOCK((base)->lockvar, 0);			\
 	} while (0)

@@ -307,6 +307,7 @@ HT_GENERATE(event_debug_map, event_debug_entry, node, hash_debug_entry,
 	event_debug_mode_too_late = 1;					\
 	} while (0)
 /* Macro: assert that ev is setup (i.e., okay to add or inspect) */
+//检查，如果event在表中不存在，则报错
 #define event_debug_assert_is_setup_(ev) do {				\
 	if (event_debug_mode_on_) {					\
 		struct event_debug_entry *dent,find;			\
@@ -449,6 +450,7 @@ event_base_update_cache_time(struct event_base *base)
 	return 0;
 }
 
+//由callback反推出event
 static inline struct event *
 event_callback_to_event(struct event_callback *evcb)
 {
@@ -481,9 +483,11 @@ struct event_base *
 event_base_new(void)
 {
 	struct event_base *base = NULL;
+	//构造config
 	struct event_config *cfg = event_config_new();
 	if (cfg) {
 		base = event_base_new_with_config(cfg);
+		//释放创建的event_config
 		event_config_free(cfg);
 	}
 	return base;
@@ -515,10 +519,10 @@ event_is_method_disabled(const char *name)
 
 	evutil_snprintf(environment, sizeof(environment), "EVENT_NO%s", name);
 	for (i = 8; environment[i] != '\0'; ++i)
-		environment[i] = EVUTIL_TOUPPER_(environment[i]);
+		environment[i] = EVUTIL_TOUPPER_(environment[i]);//转换为大写
 	/* Note that evutil_getenv_() ignores the environment entirely if
 	 * we're setuid */
-	return (evutil_getenv_(environment) != NULL);
+	return (evutil_getenv_(environment) != NULL);//取此对应的环境变量（如果提供了此环境变量，则返回true
 }
 
 int
@@ -632,6 +636,7 @@ event_base_new_with_config(const struct event_config *cfg)
 	    base->max_dispatch_time.tv_sec == -1)
 		base->limit_callbacks_after_prio = INT_MAX;
 
+	//如果base->evbase可以初始成功，则使用base->evbase
 	for (i = 0; eventops[i] && !base->evbase; i++) {
 		if (cfg != NULL) {
 			/* determine if this backend should be avoided */
@@ -644,15 +649,18 @@ event_base_new_with_config(const struct event_config *cfg)
 		}
 
 		/* also obey the environment variables */
+		//如果event方法被禁用，则不处理
 		if (should_check_environment &&
 		    event_is_method_disabled(eventops[i]->name))
 			continue;
 
-		base->evsel = eventops[i];
+		base->evsel = eventops[i];//eventops采用效果优先级进行排序。
 
+		//尝试采用evsel进行初始化
 		base->evbase = base->evsel->init(base);
 	}
 
+	//遍历了很多种,无法实现初始化，故报错
 	if (base->evbase == NULL) {
 		event_warnx("%s: no event mechanism available",
 		    __func__);
@@ -661,10 +669,12 @@ event_base_new_with_config(const struct event_config *cfg)
 		return NULL;
 	}
 
+	//显示采用的方法
 	if (evutil_getenv_("EVENT_SHOW_METHOD"))
 		event_msgx("libevent using: %s", base->evsel->name);
 
 	/* allocate a single active event queue */
+	//初始化一个优先队列
 	if (event_base_priority_init(base, 1) < 0) {
 		event_base_free(base);
 		return NULL;
@@ -1090,6 +1100,7 @@ event_get_supported_methods(void)
 	return (methods);
 }
 
+//构造默认的event_config
 struct event_config *
 event_config_new(void)
 {
@@ -1223,6 +1234,7 @@ event_base_priority_init(struct event_base *base, int npriorities)
 	}
 	base->nactivequeues = npriorities;
 
+	//初始化对应数量的队列
 	for (i = 0; i < base->nactivequeues; ++i) {
 		TAILQ_INIT(&base->activequeues[i]);
 	}
@@ -1569,6 +1581,7 @@ event_persist_closure(struct event_base *base, struct event *ev)
 	}
 
 	// Save our callback before we release the lock
+	//提取回调，提取参数，报取fd
 	evcb_callback = ev->ev_callback;
         evcb_fd = ev->ev_fd;
         evcb_res = ev->ev_res;
@@ -1577,6 +1590,8 @@ event_persist_closure(struct event_base *base, struct event *ev)
 	// Release the lock
  	EVBASE_RELEASE_LOCK(base, th_base_lock);
 
+ 	//执行回调，evcb_fd 要操作文件描述符
+ 	//ev_arg 采用参数
 	// Execute the callback
         (evcb_callback)(evcb_fd, evcb_res, evcb_arg);
 }
@@ -1598,14 +1613,17 @@ event_process_active_single_queue(struct event_base *base,
 
 	EVUTIL_ASSERT(activeq != NULL);
 
+	//遍历activeq（队列中已有多个evcb被添加)
 	for (evcb = TAILQ_FIRST(activeq); evcb; evcb = TAILQ_FIRST(activeq)) {
 		struct event *ev=NULL;
 		if (evcb->evcb_flags & EVLIST_INIT) {
 			ev = event_callback_to_event(evcb);
 
 			if (ev->ev_events & EV_PERSIST || ev->ev_flags & EVLIST_FINALIZING)
+				//持久事件，将事件移除
 				event_queue_remove_active(base, evcb);
 			else
+				//非持久事件，将fd移除
 				event_del_nolock_(ev, EVENT_DEL_NOBLOCK);
 			event_debug((
 			    "event_process_active: event: %p, %s%s%scall %p",
@@ -1637,7 +1655,7 @@ event_process_active_single_queue(struct event_base *base,
 			break;
 		case EV_CLOSURE_EVENT_PERSIST:
 			EVUTIL_ASSERT(ev != NULL);
-			event_persist_closure(base, ev);
+			event_persist_closure(base, ev);//执行回调
 			break;
 		case EV_CLOSURE_EVENT: {
 			void (*evcb_callback)(evutil_socket_t, short, void *);
@@ -1733,14 +1751,17 @@ event_process_active(struct event_base *base)
 		endtime = NULL;
 	}
 
+	//遍历处理每个队列的事物
 	for (i = 0; i < base->nactivequeues; ++i) {
 		if (TAILQ_FIRST(&base->activequeues[i]) != NULL) {
 			base->event_running_priority = i;
-			activeq = &base->activequeues[i];
+			activeq = &base->activequeues[i];//出队一个队列
 			if (i < limit_after_prio)
+				//小于limit_after_prio时，全部按顺序处理
 				c = event_process_active_single_queue(base, activeq,
 				    INT_MAX, NULL);
 			else
+				//大于limit_after_prio时，最大处理maxcb个
 				c = event_process_active_single_queue(base, activeq,
 				    maxcb, endtime);
 			if (c < 0) {
@@ -1947,6 +1968,7 @@ event_base_loop(struct event_base *base, int flags)
 
 		clear_time_cache(base);
 
+		//事件分发（创建event，并将其挂在链表中）
 		res = evsel->dispatch(base, tv_p);
 
 		if (res == -1) {
@@ -1961,6 +1983,7 @@ event_base_loop(struct event_base *base, int flags)
 		timeout_process(base);
 
 		if (N_ACTIVE_CALLBACKS(base)) {
+			//在存需要处理的事件，处理事件
 			int n = event_process_active(base);
 			if ((flags & EVLOOP_ONCE)
 			    && N_ACTIVE_CALLBACKS(base) == 0
@@ -2064,6 +2087,7 @@ event_base_once(struct event_base *base, evutil_socket_t fd, short events,
 	return (0);
 }
 
+//事件关注函数，生成事件
 int
 event_assign(struct event *ev, struct event_base *base, evutil_socket_t fd, short events, void (*callback)(evutil_socket_t, short, void *), void *arg)
 {
@@ -2086,17 +2110,20 @@ event_assign(struct event *ev, struct event_base *base, evutil_socket_t fd, shor
 	ev->ev_pncalls = NULL;
 
 	if (events & EV_SIGNAL) {
+		//处理信号，则不应有EV_READ,EV_WRITE,EV_CLOSED
 		if ((events & (EV_READ|EV_WRITE|EV_CLOSED)) != 0) {
 			event_warnx("%s: EV_SIGNAL is not compatible with "
 			    "EV_READ, EV_WRITE or EV_CLOSED", __func__);
 			return -1;
 		}
-		ev->ev_closure = EV_CLOSURE_EVENT_SIGNAL;
+		ev->ev_closure = EV_CLOSURE_EVENT_SIGNAL;//信号的类型
 	} else {
 		if (events & EV_PERSIST) {
+			//持续事件
 			evutil_timerclear(&ev->ev_io_timeout);
 			ev->ev_closure = EV_CLOSURE_EVENT_PERSIST;
 		} else {
+			//其它类型事件
 			ev->ev_closure = EV_CLOSURE_EVENT;
 		}
 	}
@@ -2108,6 +2135,7 @@ event_assign(struct event *ev, struct event_base *base, evutil_socket_t fd, shor
 		ev->ev_pri = base->nactivequeues / 2;
 	}
 
+	//将ev加入到hash表中
 	event_debug_note_setup_(ev);
 
 	return 0;
@@ -2157,6 +2185,7 @@ event_base_get_running_event(struct event_base *base)
 	return ev;
 }
 
+//新建关注的事件
 struct event *
 event_new(struct event_base *base, evutil_socket_t fd, short events, void (*cb)(evutil_socket_t, short, void *), void *arg)
 {
@@ -2433,6 +2462,7 @@ event_get_priority(const struct event *ev)
 	return ev->ev_pri;
 }
 
+//event添加到框架
 int
 event_add(struct event *ev, const struct timeval *tv)
 {
@@ -2602,6 +2632,7 @@ event_add_nolock_(struct event *ev, const struct timeval *tv,
 		if (ev->ev_events & (EV_READ|EV_WRITE|EV_CLOSED))
 			res = evmap_io_add_(base, ev->ev_fd, ev);
 		else if (ev->ev_events & EV_SIGNAL)
+			//信号处理
 			res = evmap_signal_add_(base, (int)ev->ev_fd, ev);
 		if (res != -1)
 			event_queue_insert_inserted(base, ev);
@@ -2902,6 +2933,7 @@ event_active_nolock_(struct event *ev, int res, short ncalls)
 		base->event_continue = 1;
 
 	if (ev->ev_events & EV_SIGNAL) {
+		//采用SIGNAL信号
 #ifndef EVENT__DISABLE_THREAD_SUPPORT
 		if (base->current_event == event_to_event_callback(ev) &&
 		    !EVBASE_IN_THREAD(base)) {
@@ -3340,6 +3372,7 @@ event_queue_insert_active(struct event_base *base, struct event_callback *evcb)
 	base->event_count_active++;
 	MAX_EVENT_COUNT(base->event_count_active_max, base->event_count_active);
 	EVUTIL_ASSERT(evcb->evcb_pri < base->nactivequeues);
+	//将evcb存入不同的队列
 	TAILQ_INSERT_TAIL(&base->activequeues[evcb->evcb_pri],
 	    evcb, evcb_active_next);
 }
@@ -3430,6 +3463,7 @@ static void *(*mm_malloc_fn_)(size_t sz) = NULL;
 static void *(*mm_realloc_fn_)(void *p, size_t sz) = NULL;
 static void (*mm_free_fn_)(void *p) = NULL;
 
+//如果提供有回调函数，则调用回调函数，否则直接调用malloc
 void *
 event_mm_malloc_(size_t sz)
 {
@@ -3442,6 +3476,7 @@ event_mm_malloc_(size_t sz)
 		return malloc(sz);
 }
 
+//实现calloc
 void *
 event_mm_calloc_(size_t count, size_t size)
 {
@@ -3508,6 +3543,7 @@ event_mm_realloc_(void *ptr, size_t sz)
 		return realloc(ptr, sz);
 }
 
+//释放内存
 void
 event_mm_free_(void *ptr)
 {
@@ -3517,6 +3553,7 @@ event_mm_free_(void *ptr)
 		free(ptr);
 }
 
+//注册内存申请释放函数
 void
 event_set_mem_functions(void *(*malloc_fn)(size_t sz),
 			void *(*realloc_fn)(void *ptr, size_t sz),

@@ -89,6 +89,7 @@ void evthreadimpl_disable_lock_debugging_(void)
 	evthread_lock_debugging_enabled_ = 0;
 }
 
+//配置线程回调
 int
 evthread_set_lock_callbacks(const struct evthread_lock_callbacks *cbs)
 {
@@ -124,6 +125,7 @@ evthread_set_lock_callbacks(const struct evthread_lock_callbacks *cbs)
 		    "initialized.");
 		return -1;
 	}
+	//采用cbs填充target
 	if (cbs->alloc && cbs->free && cbs->lock && cbs->unlock) {
 		memcpy(target, cbs, sizeof(evthread_lock_fns_));
 		return event_global_setup_locks_(1);

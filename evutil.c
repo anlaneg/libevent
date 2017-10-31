@@ -1832,6 +1832,7 @@ evutil_snprintf(char *buf, size_t buflen, const char *format, ...)
 	return r;
 }
 
+//字符串格式化
 int
 evutil_vsnprintf(char *buf, size_t buflen, const char *format, va_list ap)
 {

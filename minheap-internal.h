@@ -38,8 +38,8 @@
 
 typedef struct min_heap
 {
-	struct event** p;
-	unsigned n, a;
+	struct event** p;//申请空间
+	unsigned n, a;//使用的空间，可有效使用的空间
 } min_heap_t;
 
 static inline void	     min_heap_ctor_(min_heap_t* s);
@@ -70,9 +70,10 @@ struct event* min_heap_top_(min_heap_t* s) { return s->n ? *s->p : 0; }
 
 int min_heap_push_(min_heap_t* s, struct event* e)
 {
+	//加上一个空间，如果需要扩大，则扩大使用空间
 	if (min_heap_reserve_(s, s->n + 1))
 		return -1;
-	min_heap_shift_up_(s, s->n++, e);
+	min_heap_shift_up_(s, s->n++, e);//沿尾部向上查存放位置
 	return 0;
 }
 
@@ -80,10 +81,10 @@ struct event* min_heap_pop_(min_heap_t* s)
 {
 	if (s->n)
 	{
-		struct event* e = *s->p;
+		struct event* e = *s->p;//取堆顶元素
 		min_heap_shift_down_(s, 0u, s->p[--s->n]);
 		e->ev_timeout_pos.min_heap_idx = -1;
-		return e;
+		return e;//返回堆顶元素
 	}
 	return 0;
 }
@@ -135,9 +136,11 @@ int min_heap_reserve_(min_heap_t* s, unsigned n)
 	if (s->a < n)
 	{
 		struct event** p;
-		unsigned a = s->a ? s->a * 2 : 8;
+		unsigned a = s->a ? s->a * 2 : 8;//翻倍 或者初始为8
 		if (a < n)
-			a = n;
+			a = n;//更新有效数
+
+		//申请空间
 		if (!(p = (struct event**)mm_realloc(s->p, a * sizeof *p)))
 			return -1;
 		s->p = p;
@@ -158,18 +161,20 @@ void min_heap_shift_up_unconditional_(min_heap_t* s, unsigned hole_index, struct
     (s->p[hole_index] = e)->ev_timeout_pos.min_heap_idx = hole_index;
 }
 
+//小堆向上行
 void min_heap_shift_up_(min_heap_t* s, unsigned hole_index, struct event* e)
 {
-    unsigned parent = (hole_index - 1) / 2;
-    while (hole_index && min_heap_elem_greater(s->p[parent], e))
+    unsigned parent = (hole_index - 1) / 2;//取e的父节点
+    while (hole_index && min_heap_elem_greater(s->p[parent], e))//parent与e检查（parent最大）
     {
 	(s->p[hole_index] = s->p[parent])->ev_timeout_pos.min_heap_idx = hole_index;
 	hole_index = parent;
-	parent = (hole_index - 1) / 2;
+	parent = (hole_index - 1) / 2;//需要向上移
     }
-    (s->p[hole_index] = e)->ev_timeout_pos.min_heap_idx = hole_index;
+    (s->p[hole_index] = e)->ev_timeout_pos.min_heap_idx = hole_index;//找到了e应处的位置
 }
 
+//将e向s中存放
 void min_heap_shift_down_(min_heap_t* s, unsigned hole_index, struct event* e)
 {
     unsigned min_child = 2 * (hole_index + 1);

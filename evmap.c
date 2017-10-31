@@ -57,8 +57,8 @@
   */
 struct evmap_io {
 	struct event_dlist events;
-	ev_uint16_t nread;
-	ev_uint16_t nwrite;
+	ev_uint16_t nread;//读的数目
+	ev_uint16_t nwrite;//写的数目
 	ev_uint16_t nclose;
 };
 
@@ -327,6 +327,7 @@ evmap_io_add_(struct event_base *base, evutil_socket_t fd, struct event *ev)
 		/* XXX(niels): we cannot mix edge-triggered and
 		 * level-triggered, we should probably assert on
 		 * this. */
+		//将具体事件实现到底层（例如注册给select)
 		if (evsel->add(base, ev->ev_fd,
 			old, (ev->ev_events & EV_ET) | res, extra) == -1)
 			return (-1);
@@ -336,6 +337,7 @@ evmap_io_add_(struct event_base *base, evutil_socket_t fd, struct event *ev)
 	ctx->nread = (ev_uint16_t) nread;
 	ctx->nwrite = (ev_uint16_t) nwrite;
 	ctx->nclose = (ev_uint16_t) nclose;
+	//将事件加入
 	LIST_INSERT_HEAD(&ctx->events, ev, ev_io_next);
 
 	return (retval);
@@ -423,8 +425,10 @@ evmap_io_active_(struct event_base *base, evutil_socket_t fd, short events)
 
 	if (NULL == ctx)
 		return;
+	//遍历此fd对应的事件
 	LIST_FOREACH(ev, &ctx->events, ev_io_next) {
 		if (ev->ev_events & events)
+			//此事件关注对应的事件
 			event_active_nolock_(ev, ev->ev_events & events, 1);
 	}
 }

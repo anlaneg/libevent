@@ -118,6 +118,7 @@ ht_string_hash_(const char *s)
 #endif
 
 /* Helper: alias for the bucket containing 'elm'. */
+//取指定的桶
 #define HT_BUCKET_(head, field, elm, hashfn)				\
 	((head)->hth_table[HT_ELT_HASH_(elm,field,hashfn) % head->hth_table_length])
 
@@ -140,6 +141,7 @@ ht_string_hash_(const char *s)
   }                                                                     \
   /* Helper: returns a pointer to the right location in the table       \
    * 'head' to find or insert the element 'elm'. */                     \
+   /*　取出BUCKET,回调eqfn进行比对　*/                                      \
   static inline struct type **                                          \
   name##_HT_FIND_P_(struct name *head, struct type *elm)		\
   {                                                                     \

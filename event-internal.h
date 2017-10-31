@@ -231,7 +231,7 @@ struct event_base {
 	/** Maximum number of total events added to this event_base */
 	int event_count_max;
 	/** Number of total events active in this event_base */
-	int event_count_active;
+	int event_count_active;//有多少事件是需要处理的
 	/** Maximum number of total events active in this event_base */
 	int event_count_active_max;
 
@@ -261,9 +261,9 @@ struct event_base {
 	 * that have triggered, and whose callbacks need to be called).  Low
 	 * priority numbers are more important, and stall higher ones.
 	 */
-	struct evcallback_list *activequeues;
+	struct evcallback_list *activequeues;//队列
 	/** The length of the activequeues array */
-	int nactivequeues;
+	int nactivequeues;//队列数目
 	/** A list of event_callbacks that should become active the next time
 	 * we process events, but not this time. */
 	struct evcallback_list active_later_queue;

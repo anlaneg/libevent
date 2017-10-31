@@ -107,30 +107,30 @@ struct event;
 struct event_callback {
 	TAILQ_ENTRY(event_callback) evcb_active_next;
 	short evcb_flags;
-	ev_uint8_t evcb_pri;	/* smaller numbers are higher priority */
-	ev_uint8_t evcb_closure;
+	ev_uint8_t evcb_pri;	/* smaller numbers are higher priority *///优先级
+	ev_uint8_t evcb_closure;//事件类型
 	/* allows us to adopt for different types of events */
         union {
 		void (*evcb_callback)(evutil_socket_t, short, void *);
 		void (*evcb_selfcb)(struct event_callback *, void *);
 		void (*evcb_evfinalize)(struct event *, void *);
 		void (*evcb_cbfinalize)(struct event_callback *, void *);
-	} evcb_cb_union;
-	void *evcb_arg;
+	} evcb_cb_union;//设置回调
+	void *evcb_arg;//用户传入的回调参数
 };
 
 struct event_base;
 struct event {
-	struct event_callback ev_evcallback;
+	struct event_callback ev_evcallback;//事件回调函数相关的值
 
 	/* for managing timeouts */
 	union {
 		TAILQ_ENTRY(event) ev_next_with_common_timeout;
 		int min_heap_idx;
 	} ev_timeout_pos;
-	evutil_socket_t ev_fd;
+	evutil_socket_t ev_fd;//事件对应的fd
 
-	struct event_base *ev_base;
+	struct event_base *ev_base;//事件对应的ev_base
 
 	union {
 		/* used for io events */
@@ -148,8 +148,8 @@ struct event {
 		} ev_signal;
 	} ev_;
 
-	short ev_events;
-	short ev_res;		/* result passed to event callback */
+	short ev_events;//关注那些事件
+	short ev_res;		/* result passed to event callback */ //记录发生的事件，用于调回调
 	struct timeval ev_timeout;
 };
 

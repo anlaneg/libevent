@@ -76,13 +76,13 @@ typedef unsigned long fd_mask;
 	(DIV_ROUNDUP(n, NFDBITS) * sizeof(fd_mask))
 
 struct selectop {
-	int event_fds;		/* Highest fd in fd set */
-	int event_fdsz;
+	int event_fds;		/* Highest fd in fd set */ //记录最大的fd
+	int event_fdsz;//需要容纳足够数量fd的内存，这个即为内存的大小，用于申请readset_in,readset_out
 	int resize_out_sets;
-	fd_set *event_readset_in;
-	fd_set *event_writeset_in;
-	fd_set *event_readset_out;
-	fd_set *event_writeset_out;
+	fd_set *event_readset_in;//读事件
+	fd_set *event_writeset_in;//写事件
+	fd_set *event_readset_out;//用于输出读事件
+	fd_set *event_writeset_out;//用于输出写事件
 };
 
 static void *select_init(struct event_base *);
@@ -136,6 +136,7 @@ check_selectop(struct selectop *sop)
 #define check_selectop(sop) do { (void) sop; } while (0)
 #endif
 
+//执行select函数(超时时间为tv)
 static int
 select_dispatch(struct event_base *base, struct timeval *tv)
 {
@@ -148,7 +149,7 @@ select_dispatch(struct event_base *base, struct timeval *tv)
 		size_t sz = sop->event_fdsz;
 		if (!(readset_out = mm_realloc(sop->event_readset_out, sz)))
 			return (-1);
-		sop->event_readset_out = readset_out;
+		sop->event_readset_out = readset_out;//更新event_readset_out
 		if (!(writeset_out = mm_realloc(sop->event_writeset_out, sz))) {
 			/* We don't free readset_out here, since it was
 			 * already successfully reallocated. The next time
@@ -156,12 +157,14 @@ select_dispatch(struct event_base *base, struct timeval *tv)
 			 * no-op. */
 			return (-1);
 		}
-		sop->event_writeset_out = writeset_out;
+		sop->event_writeset_out = writeset_out;//更新event_writeset_out
 		sop->resize_out_sets = 0;
 	}
 
+	//将event_readset_in写入
 	memcpy(sop->event_readset_out, sop->event_readset_in,
 	       sop->event_fdsz);
+	//将event_readset_out写入
 	memcpy(sop->event_writeset_out, sop->event_writeset_in,
 	       sop->event_fdsz);
 
@@ -169,6 +172,7 @@ select_dispatch(struct event_base *base, struct timeval *tv)
 
 	EVBASE_RELEASE_LOCK(base, th_base_lock);
 
+	//调用select,不记录error的fd,超时时间为tv
 	res = select(nfds, sop->event_readset_out,
 	    sop->event_writeset_out, NULL, tv);
 
@@ -189,7 +193,7 @@ select_dispatch(struct event_base *base, struct timeval *tv)
 
 	check_selectop(sop);
 	i = evutil_weakrand_range_(&base->weakrand_seed, nfds);
-	for (j = 0; j < nfds; ++j) {
+	for (j = 0; j < nfds; ++j) {//针对每个fd进行遍历
 		if (++i >= nfds)
 			i = 0;
 		res = 0;
@@ -201,6 +205,7 @@ select_dispatch(struct event_base *base, struct timeval *tv)
 		if (res == 0)
 			continue;
 
+		//fd可读或者可以写或者可以读写，故走到这里
 		evmap_io_active_(base, i, res);
 	}
 	check_selectop(sop);
@@ -261,16 +266,17 @@ select_add(struct event_base *base, int fd, short old, short events, void *p)
 	 * of the fd_sets for select(2)
 	 */
 	if (sop->event_fds < fd) {
+		//之前的fd比现在的fd要大
 		int fdsz = sop->event_fdsz;
 
 		if (fdsz < (int)sizeof(fd_mask))
-			fdsz = (int)sizeof(fd_mask);
+			fdsz = (int)sizeof(fd_mask);//取最小的fd_mask
 
 		/* In theory we should worry about overflow here.  In
 		 * reality, though, the highest fd on a unixy system will
 		 * not overflow here. XXXX */
 		while (fdsz < (int) SELECT_ALLOC_SIZE(fd + 1))
-			fdsz *= 2;
+			fdsz *= 2;//提高尺寸，以包含fd+1对应的fd
 
 		if (fdsz != sop->event_fdsz) {
 			if (select_resize(sop, fdsz)) {
@@ -283,6 +289,7 @@ select_add(struct event_base *base, int fd, short old, short events, void *p)
 	}
 
 	if (events & EV_READ)
+		//事件为写事件，填入event_readset_in
 		FD_SET(fd, sop->event_readset_in);
 	if (events & EV_WRITE)
 		FD_SET(fd, sop->event_writeset_in);
@@ -310,9 +317,11 @@ select_del(struct event_base *base, int fd, short old, short events, void *p)
 	}
 
 	if (events & EV_READ)
+		//事件为读事件，则将fd自event_readset_in中取出
 		FD_CLR(fd, sop->event_readset_in);
 
 	if (events & EV_WRITE)
+		//事件为写事件，则将fd自event_writeset_in中取出
 		FD_CLR(fd, sop->event_writeset_in);
 
 	check_selectop(sop);
