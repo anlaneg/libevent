@@ -142,6 +142,7 @@ bufferevent_socket_outbuf_cb(struct evbuffer *buf,
 	}
 }
 
+//处理fd的读事件（向上封装成bufferevent)
 static void
 bufferevent_readcb(evutil_socket_t fd, short event, void *arg)
 {
@@ -362,11 +363,14 @@ bufferevent_socket_new(struct event_base *base, evutil_socket_t fd,
 	bufev = &bufev_p->bev;
 	evbuffer_set_flags(bufev->output, EVBUFFER_FLAG_DRAINS_TO_FD);
 
+	//设置此fd的读事件
 	event_assign(&bufev->ev_read, bufev->ev_base, fd,
 	    EV_READ|EV_PERSIST|EV_FINALIZE, bufferevent_readcb, bufev);
+	//设置此fd的写事件
 	event_assign(&bufev->ev_write, bufev->ev_base, fd,
 	    EV_WRITE|EV_PERSIST|EV_FINALIZE, bufferevent_writecb, bufev);
 
+	//eventbuffer层面的写回调
 	evbuffer_add_cb(bufev->output, bufferevent_socket_outbuf_cb, bufev);
 
 	evbuffer_freeze(bufev->input, 0);

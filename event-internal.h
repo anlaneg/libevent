@@ -208,8 +208,10 @@ struct event_once {
 struct event_base {
 	/** Function pointers and other data to describe this event_base's
 	 * backend. */
+	// 获取后端支持的io复用机制（一般来说linux是epoll，对于windows则是iocp）
 	const struct eventop *evsel;
 	/** Pointer to backend-specific data. */
+	//由evsel进行初始化后生成的私有数据
 	void *evbase;
 
 	/** List of changes to tell backend about at next dispatch.  Only used
@@ -237,8 +239,9 @@ struct event_base {
 
 	/** Set if we should terminate the loop once we're done processing
 	 * events. */
-	int event_gotterm;
+	int event_gotterm;//指明停止事件处理loop
 	/** Set if we should terminate the loop immediately */
+	//立即跳出事件处理
 	int event_break;
 	/** Set if we should start a new instance of the loop immediately. */
 	int event_continue;
@@ -248,7 +251,7 @@ struct event_base {
 
 	/** Set if we're running the event_base_loop function, to prevent
 	 * reentrant invocation. */
-	int running_loop;
+	int running_loop;//标记event_base_loop已被执行
 
 	/** Set to the number of deferred_cbs we've made 'active' in the
 	 * loop.  This is a hack to prevent starvation; it would be smarter
@@ -289,7 +292,7 @@ struct event_base {
 
 	/** Stored timeval: used to avoid calling gettimeofday/clock_gettime
 	 * too often. */
-	struct timeval tv_cache;
+	struct timeval tv_cache;//缓存的时间点
 
 	struct evutil_monotonic_timer monotonic_timer;
 

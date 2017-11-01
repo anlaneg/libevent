@@ -58,6 +58,7 @@ main(int argc, char **argv)
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(PORT);
 
+	//监听回调处理(收到新的client,则listener_cb被触发）
 	listener = evconnlistener_new_bind(base, listener_cb, (void *)base,
 	    LEV_OPT_REUSEABLE|LEV_OPT_CLOSE_ON_FREE, -1,
 	    (struct sockaddr*)&sin,
@@ -68,6 +69,7 @@ main(int argc, char **argv)
 		return 1;
 	}
 
+	//注册SIGINT信号处理
 	signal_event = evsignal_new(base, SIGINT, signal_cb, (void *)base);
 
 	if (!signal_event || event_add(signal_event, NULL)<0) {
@@ -77,6 +79,7 @@ main(int argc, char **argv)
 
 	event_base_dispatch(base);
 
+	//libevent销毁
 	evconnlistener_free(listener);
 	event_free(signal_event);
 	event_base_free(base);
@@ -98,10 +101,13 @@ listener_cb(struct evconnlistener *listener, evutil_socket_t fd,
 		event_base_loopbreak(base);
 		return;
 	}
+
+	//设置buffer级别的回调
 	bufferevent_setcb(bev, NULL, conn_writecb, conn_eventcb, NULL);
 	bufferevent_enable(bev, EV_WRITE);
 	bufferevent_disable(bev, EV_READ);
 
+	//发送消息
 	bufferevent_write(bev, MESSAGE, strlen(MESSAGE));
 }
 
@@ -137,5 +143,6 @@ signal_cb(evutil_socket_t sig, short events, void *user_data)
 
 	printf("Caught an interrupt signal; exiting cleanly in two seconds.\n");
 
+	//收到信号后，延迟２Ｓ使event-loop退出
 	event_base_loopexit(base, &delay);
 }

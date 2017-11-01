@@ -377,10 +377,11 @@ gettime(struct event_base *base, struct timeval *tp)
 	EVENT_BASE_ASSERT_LOCKED(base);
 
 	if (base->tv_cache.tv_sec) {
-		*tp = base->tv_cache;
+		*tp = base->tv_cache;//如果tv_cache有值，则直接由tv_cache中取tp
 		return (0);
 	}
 
+	//tv_cache没有缓存，尝试读取
 	if (evutil_gettime_monotonic_(&base->monotonic_timer, tp) == -1) {
 		return -1;
 	}
@@ -425,6 +426,7 @@ clear_time_cache(struct event_base *base)
 }
 
 /** Replace the cached time in 'base' with the current time. */
+// 更新系统时间缓存
 static inline void
 update_time_cache(struct event_base *base)
 {
@@ -1336,6 +1338,7 @@ event_signal_closure(struct event_base *base, struct event *ev)
 		ev->ev_ncalls = ncalls;
 		if (ncalls == 0)
 			ev->ev_pncalls = NULL;
+		//执行信号处理回调
 		(*ev->ev_callback)(ev->ev_fd, ev->ev_res, ev->ev_arg);
 
 		EVBASE_ACQUIRE_LOCK(base, th_base_lock);
@@ -1593,7 +1596,7 @@ event_persist_closure(struct event_base *base, struct event *ev)
  	//执行回调，evcb_fd 要操作文件描述符
  	//ev_arg 采用参数
 	// Execute the callback
-        (evcb_callback)(evcb_fd, evcb_res, evcb_arg);
+    (evcb_callback)(evcb_fd, evcb_res, evcb_arg);
 }
 
 /*
@@ -1648,10 +1651,11 @@ event_process_active_single_queue(struct event_base *base,
 		base->current_event_waiters = 0;
 #endif
 
+		//依据事件不同类型，进行不同的回调触发
 		switch (evcb->evcb_closure) {
 		case EV_CLOSURE_EVENT_SIGNAL:
 			EVUTIL_ASSERT(ev != NULL);
-			event_signal_closure(base, ev);
+			event_signal_closure(base, ev);//信号处理回调
 			break;
 		case EV_CLOSURE_EVENT_PERSIST:
 			EVUTIL_ASSERT(ev != NULL);
@@ -1661,7 +1665,7 @@ event_process_active_single_queue(struct event_base *base,
 			void (*evcb_callback)(evutil_socket_t, short, void *);
 			short res;
 			EVUTIL_ASSERT(ev != NULL);
-			evcb_callback = *ev->ev_callback;
+			evcb_callback = *ev->ev_callback;//直接执行回调
 			res = ev->ev_res;
 			EVBASE_RELEASE_LOCK(base, th_base_lock);
 			evcb_callback(ev->ev_fd, res, ev->ev_arg);
@@ -1809,7 +1813,7 @@ static void
 event_loopexit_cb(evutil_socket_t fd, short what, void *arg)
 {
 	struct event_base *base = arg;
-	base->event_gotterm = 1;
+	base->event_gotterm = 1;//置event_loop退出
 }
 
 int
@@ -1819,6 +1823,7 @@ event_loopexit(const struct timeval *tv)
 		    current_base, tv));
 }
 
+//延迟多久后使event loop退出
 int
 event_base_loopexit(struct event_base *event_base, const struct timeval *tv)
 {
@@ -1911,6 +1916,7 @@ event_base_loop(struct event_base *base, int flags)
 	EVBASE_ACQUIRE_LOCK(base, th_base_lock);
 
 	if (base->running_loop) {
+		//已被调用，报错
 		event_warnx("%s: reentrant invocation.  Only one event_base_loop"
 		    " can run on each event_base at once.", __func__);
 		EVBASE_RELEASE_LOCK(base, th_base_lock);
@@ -1938,6 +1944,7 @@ event_base_loop(struct event_base *base, int flags)
 
 		/* Terminate the loop if we have been asked to */
 		if (base->event_gotterm) {
+			//需要停止loop,跳出
 			break;
 		}
 
@@ -1980,6 +1987,7 @@ event_base_loop(struct event_base *base, int flags)
 
 		update_time_cache(base);
 
+		//定时器处理
 		timeout_process(base);
 
 		if (N_ACTIVE_CALLBACKS(base)) {
@@ -2039,6 +2047,7 @@ event_base_once(struct event_base *base, evutil_socket_t fd, short events,
 
 	/* We cannot support signals that just fire once, or persistent
 	 * events. */
+	//参数错误
 	if (events & (EV_SIGNAL|EV_PERSIST))
 		return (-1);
 
@@ -2049,9 +2058,11 @@ event_base_once(struct event_base *base, evutil_socket_t fd, short events,
 	eonce->arg = arg;
 
 	if ((events & (EV_TIMEOUT|EV_SIGNAL|EV_READ|EV_WRITE|EV_CLOSED)) == EV_TIMEOUT) {
+		//事件在（信号，读，写，关闭，超时）集合中只发现超时
 		evtimer_assign(&eonce->ev, base, event_once_cb, eonce);
 
 		if (tv == NULL || ! evutil_timerisset(tv)) {
+			//未给定超时时间，则立即超时
 			/* If the event is going to become active immediately,
 			 * don't put it on the timeout queue.  This is one
 			 * idiom for scheduling a callback, so let's make
@@ -2059,10 +2070,12 @@ event_base_once(struct event_base *base, evutil_socket_t fd, short events,
 			activate = 1;
 		}
 	} else if (events & (EV_READ|EV_WRITE|EV_CLOSED)) {
+		//fd读写事件
 		events &= EV_READ|EV_WRITE|EV_CLOSED;
 
 		event_assign(&eonce->ev, base, fd, events, event_once_cb, eonce);
 	} else {
+		//不支持其它事件注册（参数错误）
 		/* Bad event combination */
 		mm_free(eonce);
 		return (-1);
@@ -2071,6 +2084,7 @@ event_base_once(struct event_base *base, evutil_socket_t fd, short events,
 	if (res == 0) {
 		EVBASE_ACQUIRE_LOCK(base, th_base_lock);
 		if (activate)
+			//加入触发队列
 			event_active_nolock_(&eonce->ev, EV_TIMEOUT, 1);
 		else
 			res = event_add_nolock_(&eonce->ev, tv, 0);
@@ -3167,11 +3181,14 @@ timeout_process(struct event_base *base)
 	struct event *ev;
 
 	if (min_heap_empty_(&base->timeheap)) {
+		//time堆为空，不处理
 		return;
 	}
 
-	gettime(base, &now);
+	gettime(base, &now);//取当前时间
 
+	//取堆顶元素，如果堆顶元素大于now，则不需要再处理了
+	//如果小于now,则删除事件，并生成新的事件，并等待触发
 	while ((ev = min_heap_top_(&base->timeheap))) {
 		if (evutil_timercmp(&ev->ev_timeout, &now, >))
 			break;

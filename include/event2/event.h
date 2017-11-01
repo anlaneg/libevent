@@ -965,6 +965,7 @@ int event_base_got_break(struct event_base *);
 
     Aliases for working with one-shot timer events */
 /**@{*/
+//timer设置
 #define evtimer_assign(ev, b, cb, arg) \
 	event_assign((ev), (b), -1, 0, (cb), (arg))
 #define evtimer_new(b, cb, arg)	       event_new((b), -1, 0, (cb), (arg))
@@ -983,6 +984,7 @@ int event_base_got_break(struct event_base *);
 #define evsignal_add(ev, tv)		event_add((ev), (tv))
 #define evsignal_assign(ev, b, x, cb, arg)			\
 	event_assign((ev), (b), (x), EV_SIGNAL|EV_PERSIST, cb, (arg))
+//注册信号事件
 #define evsignal_new(b, x, cb, arg)				\
 	event_new((b), (x), EV_SIGNAL|EV_PERSIST, (cb), (arg))
 #define evsignal_del(ev)		event_del(ev)

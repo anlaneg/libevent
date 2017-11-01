@@ -306,6 +306,7 @@ evutil_gettime_monotonic_(struct evutil_monotonic_timer *base,
 	struct timespec ts;
 
 	if (base->monotonic_clock < 0) {
+		//如果获取当前时间失败，则返回-1
 		if (evutil_gettimeofday(tp, NULL) < 0)
 			return -1;
 		adjust_monotonic_time(base, tp);

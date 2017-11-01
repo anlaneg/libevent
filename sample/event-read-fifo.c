@@ -56,7 +56,7 @@ fifo_read(evutil_socket_t fd, short event, void *arg)
 #else
 	len = read(fd, buf, sizeof(buf) - 1);
 
-	if (len <= 0) {
+	if (len <= 0) {//读失败或者读结束时执行
 		if (len == -1)
 			perror("read");
 		else if (len == 0)
@@ -138,17 +138,20 @@ main(int argc, char **argv)
                            event_self_cbarg());
 #else
 	/* catch SIGINT so that event.fifo can be cleaned up */
+	//如果收到SIGINT,则退出eventloop循环
 	signal_int = evsignal_new(base, SIGINT, signal_cb, base);
-	event_add(signal_int, NULL);
+	event_add(signal_int, NULL);//将事件加入
 
+	//处理socket的收事件
 	evfifo = event_new(base, socket, EV_READ|EV_PERSIST, fifo_read,
                            event_self_cbarg());
 #endif
 
 	/* Add it to the active events, without a timeout */
-	event_add(evfifo, NULL);
+	event_add(evfifo, NULL);//将此读事件加入
 
-	event_base_dispatch(base);
+	event_base_dispatch(base);//事件循环
+	//开始销毁
 	event_base_free(base);
 #ifdef _WIN32
 	CloseHandle(socket);

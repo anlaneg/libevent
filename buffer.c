@@ -517,6 +517,7 @@ evbuffer_invoke_callbacks_(struct evbuffer *buffer)
 		return;
 	}
 
+	//延时回调
 	if (buffer->deferred_cbs) {
 		if (event_deferred_cb_schedule_(buffer->cb_queue, &buffer->deferred)) {
 			evbuffer_incref_and_lock_(buffer);
@@ -2236,6 +2237,7 @@ evbuffer_read_setup_vecs_(struct evbuffer *buf, ev_ssize_t howmuch,
 		size_t avail = (size_t) CHAIN_SPACE_LEN(chain);
 		if (avail > (howmuch - so_far) && exact)
 			avail = howmuch - so_far;
+		//构造vec,构造读取的base地址，构造读取的每块长度
 		vecs[i].iov_base = (void *)CHAIN_SPACE_PTR(chain);
 		vecs[i].iov_len = avail;
 		so_far += avail;
@@ -2246,6 +2248,8 @@ evbuffer_read_setup_vecs_(struct evbuffer *buf, ev_ssize_t howmuch,
 	return i;
 }
 
+//获取给定socket本次最多可以读取多少字节
+//如果有函数支持，则调用函数预先获取，如果无函数支持，则采用默认大小
 static int
 get_n_bytes_readable_on_socket(evutil_socket_t fd)
 {
@@ -2290,9 +2294,9 @@ evbuffer_read(struct evbuffer *buf, evutil_socket_t fd, int howmuch)
 
 	n = get_n_bytes_readable_on_socket(fd);
 	if (n <= 0 || n > EVBUFFER_MAX_READ)
-		n = EVBUFFER_MAX_READ;
+		n = EVBUFFER_MAX_READ;//如果n过大或过小均使其规范化
 	if (howmuch < 0 || howmuch > n)
-		howmuch = n;
+		howmuch = n;//规范化，本次可读取的最大大小
 
 #ifdef USE_IOVEC_IMPL
 	/* Since we can use iovecs, we're willing to use the last
@@ -2303,6 +2307,7 @@ evbuffer_read(struct evbuffer *buf, evutil_socket_t fd, int howmuch)
 	} else {
 		IOV_TYPE vecs[NUM_READ_IOVEC];
 #ifdef EVBUFFER_IOVEC_IS_NATIVE_
+		//构造要读取的vec
 		nvecs = evbuffer_read_setup_vecs_(buf, howmuch, vecs,
 		    NUM_READ_IOVEC, &chainp, 1);
 #else
@@ -2331,6 +2336,7 @@ evbuffer_read(struct evbuffer *buf, evutil_socket_t fd, int howmuch)
 				n = bytesRead;
 		}
 #else
+		//采用readv进行读取
 		n = readv(fd, vecs, nvecs);
 #endif
 	}

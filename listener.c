@@ -206,6 +206,7 @@ evconnlistener_new(struct event_base *base,
 	return &lev->base;
 }
 
+//绑定一个新的socket,如果新接入一个client,则调用回调cb
 struct evconnlistener *
 evconnlistener_new_bind(struct event_base *base, evconnlistener_cb cb,
     void *ptr, unsigned flags, int backlog, const struct sockaddr *sa,
@@ -227,6 +228,7 @@ evconnlistener_new_bind(struct event_base *base, evconnlistener_cb cb,
 	if (fd == -1)
 		return NULL;
 
+	//设置keepalive
 	if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (void*)&on, sizeof(on))<0)
 		goto err;
 
@@ -246,10 +248,12 @@ evconnlistener_new_bind(struct event_base *base, evconnlistener_cb cb,
 	}
 
 	if (sa) {
+		//实现地址绑定
 		if (bind(fd, sa, socklen)<0)
 			goto err;
 	}
 
+	//注册此fd的接入消息
 	listener = evconnlistener_new(base, cb, ptr, flags, backlog, fd);
 	if (!listener)
 		goto err;
@@ -396,6 +400,7 @@ listener_read_cb(evutil_socket_t fd, short what, void *p)
 	while (1) {
 		struct sockaddr_storage ss;
 		ev_socklen_t socklen = sizeof(ss);
+		//接入一个新的client
 		evutil_socket_t new_fd = evutil_accept4_(fd, (struct sockaddr*)&ss, &socklen, lev->accept4_flags);
 		if (new_fd < 0)
 			break;
@@ -415,6 +420,7 @@ listener_read_cb(evutil_socket_t fd, short what, void *p)
 		cb = lev->cb;
 		user_data = lev->user_data;
 		UNLOCK(lev);
+		//回调cb，表达新接入一个新的client
 		cb(lev, new_fd, (struct sockaddr*)&ss, (int)socklen,
 		    user_data);
 		LOCK(lev);
