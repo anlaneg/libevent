@@ -57,8 +57,11 @@ extern "C" {
 #define EVLIST_TIMEOUT	    0x01
 #define EVLIST_INSERTED	    0x02
 #define EVLIST_SIGNAL	    0x04
+//有此标记时，标明此事件已被置入到active队列中
 #define EVLIST_ACTIVE	    0x08
 #define EVLIST_INTERNAL	    0x10
+//有此标记时，标明此事件已被置入到active_later_queue队列中
+//当事件在active中过多时，将被加入到active_later队列
 #define EVLIST_ACTIVE_LATER 0x20
 #define EVLIST_FINALIZING   0x40
 #define EVLIST_INIT	    0x80
@@ -111,7 +114,7 @@ struct event_callback {
 	ev_uint8_t evcb_closure;//事件类型
 	/* allows us to adopt for different types of events */
         union {
-		void (*evcb_callback)(evutil_socket_t, short, void *);
+		void (*evcb_callback)(evutil_socket_t, short, void *);//文件描述符相关的读写callback
 		void (*evcb_selfcb)(struct event_callback *, void *);
 		void (*evcb_evfinalize)(struct event *, void *);
 		void (*evcb_cbfinalize)(struct event_callback *, void *);

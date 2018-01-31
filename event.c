@@ -377,7 +377,8 @@ gettime(struct event_base *base, struct timeval *tp)
 	EVENT_BASE_ASSERT_LOCKED(base);
 
 	if (base->tv_cache.tv_sec) {
-		*tp = base->tv_cache;//如果tv_cache有值，则直接由tv_cache中取tp
+		//如果tv_cache有值（有缓存的时间)，则直接由tv_cache中取tp
+		*tp = base->tv_cache;
 		return (0);
 	}
 
@@ -386,6 +387,7 @@ gettime(struct event_base *base, struct timeval *tp)
 		return -1;
 	}
 
+	//检查是否需要更新last_updated_clock_diff(如果差值过大，则更新）
 	if (base->last_updated_clock_diff + CLOCK_SYNC_INTERVAL
 	    < tp->tv_sec) {
 		struct timeval tv;
@@ -1659,7 +1661,7 @@ event_process_active_single_queue(struct event_base *base,
 			break;
 		case EV_CLOSURE_EVENT_PERSIST:
 			EVUTIL_ASSERT(ev != NULL);
-			event_persist_closure(base, ev);//执行回调
+			event_persist_closure(base, ev);//持久性事件回调执行
 			break;
 		case EV_CLOSURE_EVENT: {
 			void (*evcb_callback)(evutil_socket_t, short, void *);
@@ -1916,7 +1918,7 @@ event_base_loop(struct event_base *base, int flags)
 	EVBASE_ACQUIRE_LOCK(base, th_base_lock);
 
 	if (base->running_loop) {
-		//已被调用，报错
+		//检查此函数是否已被调用，报错
 		event_warnx("%s: reentrant invocation.  Only one event_base_loop"
 		    " can run on each event_base at once.", __func__);
 		EVBASE_RELEASE_LOCK(base, th_base_lock);
@@ -1954,12 +1956,14 @@ event_base_loop(struct event_base *base, int flags)
 
 		tv_p = &tv;
 		if (!N_ACTIVE_CALLBACKS(base) && !(flags & EVLOOP_NONBLOCK)) {
+			//没有事件需要处理，且flag不含非阻塞标记，则提取下次timeout事件
 			timeout_next(base, &tv_p);
 		} else {
 			/*
 			 * if we have active events, we just poll new events
 			 * without waiting.
 			 */
+			//有事件需要处理，则认为超时时间为０
 			evutil_timerclear(&tv);
 		}
 
@@ -1971,11 +1975,13 @@ event_base_loop(struct event_base *base, int flags)
 			goto done;
 		}
 
+		//将activelater事件移动到active队列中
 		event_queue_make_later_events_active(base);
 
 		clear_time_cache(base);
 
 		//事件分发（创建event，并将其挂在链表中）
+		//tv_p是我们能接受的超时时间（其极有可能等于最小的timeout时间）
 		res = evsel->dispatch(base, tv_p);
 
 		if (res == -1) {
@@ -1991,7 +1997,7 @@ event_base_loop(struct event_base *base, int flags)
 		timeout_process(base);
 
 		if (N_ACTIVE_CALLBACKS(base)) {
-			//在存需要处理的事件，处理事件
+			//存在需要处理的事件，处理事件（在此处实现回调触发）
 			int n = event_process_active(base);
 			if ((flags & EVLOOP_ONCE)
 			    && N_ACTIVE_CALLBACKS(base) == 0
@@ -2101,20 +2107,20 @@ event_base_once(struct event_base *base, evutil_socket_t fd, short events,
 	return (0);
 }
 
-//事件关注函数，生成事件
+//事件关注函数，生成事件（fd事件相关的文件描述符，events关注的事件，callback回调，arg回调参数）
 int
 event_assign(struct event *ev, struct event_base *base, evutil_socket_t fd, short events, void (*callback)(evutil_socket_t, short, void *), void *arg)
 {
 	if (!base)
 		base = current_base;
 	if (arg == &event_self_cbarg_ptr_)
-		arg = ev;
+		arg = ev;//解决参数为event自身的问题
 
 	event_debug_assert_not_added_(ev);
 
 	ev->ev_base = base;
 
-	ev->ev_callback = callback;
+	ev->ev_callback = callback;//设置回调
 	ev->ev_arg = arg;
 	ev->ev_fd = fd;
 	ev->ev_events = events;
@@ -2487,6 +2493,7 @@ event_add(struct event *ev, const struct timeval *tv)
 		return -1;
 	}
 
+	//加锁
 	EVBASE_ACQUIRE_LOCK(ev->ev_base, th_base_lock);
 
 	res = event_add_nolock_(ev, tv, 0);
@@ -2782,6 +2789,7 @@ event_del_(struct event *ev, int blocking)
 	return (res);
 }
 
+//事件移除
 int
 event_del(struct event *ev)
 {
@@ -2858,6 +2866,7 @@ event_del_nolock_(struct event *ev, int blocking)
 	if (ev->ev_flags & EVLIST_INSERTED) {
 		event_queue_remove_inserted(base, ev);
 		if (ev->ev_events & (EV_READ|EV_WRITE|EV_CLOSED))
+			//如果已插入且关注读写事件，则按io删除处理
 			res = evmap_io_del_(base, ev->ev_fd, ev);
 		else
 			res = evmap_signal_del_(base, (int)ev->ev_fd, ev);
@@ -2970,6 +2979,7 @@ event_active_later_(struct event *ev, int res)
 	EVBASE_RELEASE_LOCK(ev->ev_base, th_base_lock);
 }
 
+//将event加入到active_later队列
 void
 event_active_later_nolock_(struct event *ev, int res)
 {
@@ -3011,16 +3021,17 @@ event_callback_activate_nolock_(struct event_base *base,
 	default:
 		EVUTIL_ASSERT(0);
 		EVUTIL_FALLTHROUGH;
-	case EVLIST_ACTIVE_LATER:
+	case EVLIST_ACTIVE_LATER://事件被加入到active_later队列了，将其移除
 		event_queue_remove_active_later(base, evcb);
 		r = 0;
 		break;
 	case EVLIST_ACTIVE:
-		return 0;
+		return 0;//已加入到active队列，不需要继续处理
 	case 0:
 		break;
 	}
 
+	//将事件加入到active队列
 	event_queue_insert_active(base, evcb);
 
 	if (EVBASE_NEED_NOTIFY(base))
@@ -3034,7 +3045,7 @@ event_callback_activate_later_nolock_(struct event_base *base,
     struct event_callback *evcb)
 {
 	if (evcb->evcb_flags & (EVLIST_ACTIVE|EVLIST_ACTIVE_LATER))
-		return 0;
+		return 0;//已经在active或者active_later队列中了，直接返回
 
 	event_queue_insert_active_later(base, evcb);
 	if (EVBASE_NEED_NOTIFY(base))
@@ -3124,8 +3135,10 @@ event_deferred_cb_schedule_(struct event_base *base, struct event_callback *cb)
 		base = current_base;
 	EVBASE_ACQUIRE_LOCK(base, th_base_lock);
 	if (base->n_deferreds_queued > MAX_DEFERREDS_QUEUED) {
+		//被加入的事件过多，将其加入到active_later队列中
 		r = event_callback_activate_later_nolock_(base, cb);
 	} else {
+		//直接加入到active队列
 		r = event_callback_activate_nolock_(base, cb);
 		if (r) {
 			++base->n_deferreds_queued;
@@ -3135,6 +3148,7 @@ event_deferred_cb_schedule_(struct event_base *base, struct event_callback *cb)
 	return r;
 }
 
+//检查timeheap中下一个到期的event距当前时间还有多少时间
 static int
 timeout_next(struct event_base *base, struct timeval **tv_p)
 {
@@ -3147,23 +3161,29 @@ timeout_next(struct event_base *base, struct timeval **tv_p)
 	ev = min_heap_top_(&base->timeheap);
 
 	if (ev == NULL) {
+		//堆顶无元素，下次超时时间未知
 		/* if no time-based events are active wait for I/O */
 		*tv_p = NULL;
 		goto out;
 	}
 
+	//取当前时间
 	if (gettime(base, &now) == -1) {
 		res = -1;
 		goto out;
 	}
 
+	//检查event指定的timeout时间是否小于now时间（即是否已到期）
 	if (evutil_timercmp(&ev->ev_timeout, &now, <=)) {
+		//已到期，差值为０
 		evutil_timerclear(tv);
 		goto out;
 	}
 
+	//用tv记录，event还需要多久才到期（未到期，差值为正数）
 	evutil_timersub(&ev->ev_timeout, &now, tv);
 
+	//校验差值必须为正数
 	EVUTIL_ASSERT(tv->tv_sec >= 0);
 	EVUTIL_ASSERT(tv->tv_usec >= 0);
 	event_debug(("timeout_next: event: %p, in %d seconds, %d useconds", ev, (int)tv->tv_sec, (int)tv->tv_usec));
@@ -3372,11 +3392,13 @@ event_queue_insert_inserted(struct event_base *base, struct event *ev)
 	ev->ev_flags |= EVLIST_INSERTED;
 }
 
+//将事件evcb加入到activequeues队例中
 static void
 event_queue_insert_active(struct event_base *base, struct event_callback *evcb)
 {
 	EVENT_BASE_ASSERT_LOCKED(base);
 
+	//检查此事件是否已被置入active队列
 	if (evcb->evcb_flags & EVLIST_ACTIVE) {
 		/* Double insertion is possible for active events */
 		return;
@@ -3394,10 +3416,12 @@ event_queue_insert_active(struct event_base *base, struct event_callback *evcb)
 	    evcb, evcb_active_next);
 }
 
+//将事件加入到active_later队列
 static void
 event_queue_insert_active_later(struct event_base *base, struct event_callback *evcb)
 {
 	EVENT_BASE_ASSERT_LOCKED(base);
+	//检查是否已加入
 	if (evcb->evcb_flags & (EVLIST_ACTIVE_LATER|EVLIST_ACTIVE)) {
 		/* Double insertion is possible */
 		return;
@@ -3435,6 +3459,7 @@ event_queue_insert_timeout(struct event_base *base, struct event *ev)
 	}
 }
 
+//将active_later_queue中的事件移动到activequeues队列中
 static void
 event_queue_make_later_events_active(struct event_base *base)
 {
@@ -3442,8 +3467,11 @@ event_queue_make_later_events_active(struct event_base *base)
 	EVENT_BASE_ASSERT_LOCKED(base);
 
 	while ((evcb = TAILQ_FIRST(&base->active_later_queue))) {
+		//将evcb自base->active_later_queue中摘取出来
 		TAILQ_REMOVE(&base->active_later_queue, evcb, evcb_active_next);
+		//置active标记，移除active_later标记
 		evcb->evcb_flags = (evcb->evcb_flags & ~EVLIST_ACTIVE_LATER) | EVLIST_ACTIVE;
+		//校验event的优先级，将event放入正确的active队列
 		EVUTIL_ASSERT(evcb->evcb_pri < base->nactivequeues);
 		TAILQ_INSERT_TAIL(&base->activequeues[evcb->evcb_pri], evcb, evcb_active_next);
 		base->n_deferreds_queued += (evcb->evcb_closure == EV_CLOSURE_CB_SELF);

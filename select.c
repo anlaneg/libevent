@@ -196,6 +196,7 @@ select_dispatch(struct event_base *base, struct timeval *tv)
 	for (j = 0; j < nfds; ++j) {//针对每个fd进行遍历
 		if (++i >= nfds)
 			i = 0;
+		//设置res，记录对应fd触发怎样的时间
 		res = 0;
 		if (FD_ISSET(i, sop->event_readset_out))
 			res |= EV_READ;
@@ -206,6 +207,7 @@ select_dispatch(struct event_base *base, struct timeval *tv)
 			continue;
 
 		//fd可读或者可以写或者可以读写，故走到这里
+		//将事件加入到active队列
 		evmap_io_active_(base, i, res);
 	}
 	check_selectop(sop);
@@ -301,7 +303,7 @@ select_add(struct event_base *base, int fd, short old, short events, void *p)
 /*
  * Nothing to be done here.
  */
-
+//事件移除（将fd自select中移除）
 static int
 select_del(struct event_base *base, int fd, short old, short events, void *p)
 {

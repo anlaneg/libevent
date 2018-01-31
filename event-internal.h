@@ -257,6 +257,7 @@ struct event_base {
 	 * loop.  This is a hack to prevent starvation; it would be smarter
 	 * to just use event_config_set_max_dispatch_interval's max_callbacks
 	 * feature */
+	//在active队列中的事件数量
 	int n_deferreds_queued;
 
 	/* Active event management. */
