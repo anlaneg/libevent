@@ -2233,7 +2233,7 @@ event_base_get_running_event(struct event_base *base)
 
 //新建关注的事件
 struct event *
-event_new(struct event_base *base, evutil_socket_t fd, short events, void (*cb)(evutil_socket_t, short, void *), void *arg)
+event_new(struct event_base *base, evutil_socket_t fd, short events, void (*cb/*事件回调*/)(evutil_socket_t, short, void *), void *arg)
 {
 	struct event *ev;
 	ev = mm_malloc(sizeof(struct event));

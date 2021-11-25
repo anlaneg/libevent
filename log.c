@@ -209,6 +209,7 @@ event_logv_(int severity, const char *errstr, const char *fmt, va_list ap)
 
 static event_log_cb log_fn = NULL;
 
+/*设置日志回调*/
 void
 event_set_log_callback(event_log_cb cb)
 {
@@ -219,8 +220,10 @@ static void
 event_log(int severity, const char *msg)
 {
 	if (log_fn)
+	    /*采用日志回调输出*/
 		log_fn(severity, msg);
 	else {
+	    /*lib自已输出*/
 		const char *severity_str;
 		switch (severity) {
 		case EVENT_LOG_DEBUG:
