@@ -93,6 +93,7 @@ extern int evthread_lock_debugging_enabled_;
 #define EVLOCK_LOCK(lockvar,mode)					\
 	do {								\
 		if (lockvar)						\
+			/*加锁*/\
 			evthread_lock_fns_.lock(mode, lockvar);		\
 	} while (0)
 

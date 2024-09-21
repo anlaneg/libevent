@@ -64,6 +64,7 @@ extern "C" {
 //当事件在active中过多时，将被加入到active_later队列
 #define EVLIST_ACTIVE_LATER 0x20
 #define EVLIST_FINALIZING   0x40
+/*初始化状态*/
 #define EVLIST_INIT	    0x80
 
 #define EVLIST_ALL          0xff

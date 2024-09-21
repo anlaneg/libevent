@@ -927,7 +927,7 @@ int event_base_got_break(struct event_base *);
 /** Wait for a socket or FD to become writeable */
 #define EV_WRITE	0x04
 /** Wait for a POSIX signal to be raised*/
-#define EV_SIGNAL	0x08
+#define EV_SIGNAL	0x08 /*标记信号event*/
 /**
  * Persistent event: won't get removed automatically when activated.
  *
@@ -968,7 +968,8 @@ int event_base_got_break(struct event_base *);
 //timer设置
 #define evtimer_assign(ev, b, cb, arg) \
 	event_assign((ev), (b), -1, 0, (cb), (arg))
-#define evtimer_new(b, cb, arg)	       event_new((b), -1, 0, (cb), (arg))
+/*新建evtimer,并返回event指针*/
+#define evtimer_new(b, cb, arg)	       event_new((b), -1/*不为event关联fd*/, 0/*不关注fd event*/, (cb/*回调函数*/), (arg/*回调函数对应的参数*/))
 #define evtimer_add(ev, tv)		event_add((ev), (tv))
 #define evtimer_del(ev)			event_del(ev)
 #define evtimer_pending(ev, tv)		event_pending((ev), EV_TIMEOUT, (tv))

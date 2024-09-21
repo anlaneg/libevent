@@ -235,6 +235,7 @@ static void event_debug_note_setup_(const struct event *ev)
 	struct event_debug_entry *dent, find;
 
 	if (!event_debug_mode_on_) {
+		/*debug模式未开启，退出*/
 		goto out;
 	}
 
@@ -2144,10 +2145,10 @@ event_assign(struct event *ev, struct event_base *base, evutil_socket_t fd, shor
 
 	event_debug_assert_not_added_(ev);
 
-	ev->ev_base = base;
+	ev->ev_base = base;/*设置base*/
 
 	ev->ev_callback = callback;//设置回调
-	ev->ev_arg = arg;
+	ev->ev_arg = arg;/*设置关联的callback回调参数*/
 	ev->ev_fd = fd;
 	ev->ev_events = events;
 	ev->ev_res = 0;
@@ -2231,12 +2232,12 @@ event_base_get_running_event(struct event_base *base)
 	return ev;
 }
 
-//新建关注的事件
+//申请event结构体，并初始化
 struct event *
-event_new(struct event_base *base, evutil_socket_t fd, short events, void (*cb/*事件回调*/)(evutil_socket_t, short, void *), void *arg)
+event_new(struct event_base *base, evutil_socket_t fd/*关联的fd*/, short events/*关注的事件*/, void (*cb/*事件回调*/)(evutil_socket_t, short, void *), void *arg/*event带参数*/)
 {
 	struct event *ev;
-	ev = mm_malloc(sizeof(struct event));
+	ev = mm_malloc(sizeof(struct event));/*申请event结构体*/
 	if (ev == NULL)
 		return (NULL);
 	if (event_assign(ev, base, fd, events, cb, arg) < 0) {
@@ -2515,6 +2516,7 @@ event_add(struct event *ev, const struct timeval *tv)
 	int res;
 
 	if (EVUTIL_FAILURE_CHECK(!ev->ev_base)) {
+		/*没有指定ev_base*/
 		event_warnx("%s: event has no event_base set.", __func__);
 		return -1;
 	}
@@ -2648,7 +2650,7 @@ event_add_nolock_(struct event *ev, const struct timeval *tv,
 
 	if (ev->ev_flags & EVLIST_FINALIZING) {
 		/* XXXX debug */
-		return (-1);
+		return (-1);/*有finalizing标记，直接返回失败*/
 	}
 
 	/*
@@ -2993,7 +2995,7 @@ event_active_nolock_(struct event *ev, int res, short ncalls)
 		ev->ev_pncalls = NULL;
 	}
 
-	event_callback_activate_nolock_(base, event_to_event_callback(ev));
+	event_callback_activate_nolock_(base, event_to_event_callback(ev)/*取event callback*/);
 }
 
 void
@@ -3243,7 +3245,7 @@ timeout_process(struct event_base *base)
 
 		event_debug(("timeout_process: event: %p, call %p",
 			 ev, ev->ev_callback));
-		event_active_nolock_(ev, EV_TIMEOUT, 1);
+		event_active_nolock_(ev, EV_TIMEOUT/*指明超时*/, 1);
 	}
 }
 
