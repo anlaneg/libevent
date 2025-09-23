@@ -71,7 +71,7 @@ static struct evthread_condition_callbacks original_cond_fns_ = {
 void
 evthread_set_id_callback(unsigned long (*id_fn)(void))
 {
-	evthread_id_fn_ = id_fn;
+	evthread_id_fn_ = id_fn;/*设置回调*/
 }
 
 struct evthread_lock_callbacks *evthread_get_lock_callbacks()

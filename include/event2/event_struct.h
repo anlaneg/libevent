@@ -111,7 +111,7 @@ struct event;
 struct event_callback {
 	TAILQ_ENTRY(event_callback) evcb_active_next;
 	short evcb_flags;
-	ev_uint8_t evcb_pri;	/* smaller numbers are higher priority *///优先级
+	ev_uint8_t evcb_pri;	/* smaller numbers are higher priority *///优先级（越小优先级越高）
 	ev_uint8_t evcb_closure;//事件类型
 	/* allows us to adopt for different types of events */
         union {

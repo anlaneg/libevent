@@ -82,6 +82,7 @@ evthread_posix_unlock(unsigned mode, void *lock_)
 	return pthread_mutex_unlock(lock);
 }
 
+/*取当前线程id*/
 static unsigned long
 evthread_posix_get_id(void)
 {
@@ -186,6 +187,6 @@ evthread_use_pthreads(void)
 
 	evthread_set_lock_callbacks(&cbs);
 	evthread_set_condition_callbacks(&cond_cbs);
-	evthread_set_id_callback(evthread_posix_get_id);
+	evthread_set_id_callback(evthread_posix_get_id);/*设置获取线程id的回调*/
 	return 0;
 }

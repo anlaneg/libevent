@@ -449,7 +449,7 @@ event_base_gettimeofday_cached(struct event_base *base, struct timeval *tv)
 static inline void
 clear_time_cache(struct event_base *base)
 {
-	base->tv_cache.tv_sec = 0;
+	base->tv_cache.tv_sec = 0;/*清除掉秒数记录*/
 }
 
 /** Replace the cached time in 'base' with the current time. */
@@ -459,7 +459,7 @@ update_time_cache(struct event_base *base)
 {
 	base->tv_cache.tv_sec = 0;
 	if (!(base->flags & EVENT_BASE_FLAG_NO_CACHE_TIME))
-	    gettime(base, &base->tv_cache);
+	    gettime(base, &base->tv_cache);/*取当前时间*/
 }
 
 int
@@ -512,7 +512,7 @@ struct event_base *
 event_base_new(void)
 {
 	struct event_base *base = NULL;
-	//构造config
+	//构造默认config
 	struct event_config *cfg = event_config_new();
 	if (cfg) {
 		base = event_base_new_with_config(cfg);
@@ -595,6 +595,7 @@ event_disable_debug_mode(void)
 #endif
 }
 
+/*利用cfg初始化event_base*/
 struct event_base *
 event_base_new_with_config(const struct event_config *cfg)
 {
@@ -606,13 +607,14 @@ event_base_new_with_config(const struct event_config *cfg)
 	event_debug_mode_too_late = 1;
 #endif
 
+	/*申请base*/
 	if ((base = mm_calloc(1, sizeof(struct event_base))) == NULL) {
 		event_warn("%s: calloc", __func__);
 		return NULL;
 	}
 
 	if (cfg)
-		base->flags = cfg->flags;
+		base->flags = cfg->flags;/*使用cfg中的flags*/
 
 	should_check_environment =
 	    !(cfg && (cfg->flags & EVENT_BASE_FLAG_IGNORE_ENV));
@@ -634,7 +636,7 @@ event_base_new_with_config(const struct event_config *cfg)
 		gettime(base, &tmp);
 	}
 
-	min_heap_ctor_(&base->timeheap);
+	min_heap_ctor_(&base->timeheap);/*初始化最小堆*/
 
 	base->sig.ev_signal_pair[0] = -1;
 	base->sig.ev_signal_pair[1] = -1;
@@ -650,16 +652,16 @@ event_base_new_with_config(const struct event_config *cfg)
 	base->evbase = NULL;
 
 	if (cfg) {
-		memcpy(&base->max_dispatch_time,
+		memcpy(&base->max_dispatch_time/*最大dispatch执行时间*/,
 		    &cfg->max_dispatch_interval, sizeof(struct timeval));
 		base->limit_callbacks_after_prio =
 		    cfg->limit_callbacks_after_prio;
 	} else {
 		base->max_dispatch_time.tv_sec = -1;
-		base->limit_callbacks_after_prio = 1;
+		base->limit_callbacks_after_prio = 1;/*对零号队列不进行限制*/
 	}
 	if (cfg && cfg->max_dispatch_callbacks >= 0) {
-		base->max_dispatch_callbacks = cfg->max_dispatch_callbacks;
+		base->max_dispatch_callbacks = cfg->max_dispatch_callbacks;/*限制回调每轮执行次数*/
 	} else {
 		base->max_dispatch_callbacks = INT_MAX;
 	}
@@ -700,12 +702,12 @@ event_base_new_with_config(const struct event_config *cfg)
 		return NULL;
 	}
 
-	//显示采用的方法
+	//显式指明采用的event复用方法
 	if (evutil_getenv_("EVENT_SHOW_METHOD"))
 		event_msgx("libevent using: %s", base->evsel->name);
 
 	/* allocate a single active event queue */
-	//初始化一个优先队列
+	//默认只初始化一个优先队列
 	if (event_base_priority_init(base, 1) < 0) {
 		event_base_free(base);
 		return NULL;
@@ -1233,11 +1235,12 @@ event_config_set_max_dispatch_interval(struct event_config *cfg,
 int
 event_priority_init(int npriorities)
 {
+	/*初始化npriorities个执行队列*/
 	return event_base_priority_init(current_base, npriorities);
 }
 
 int
-event_base_priority_init(struct event_base *base, int npriorities)
+event_base_priority_init(struct event_base *base, int npriorities/*优先级数量*/)
 {
 	int i, r;
 	r = -1;
@@ -1571,7 +1574,7 @@ event_persist_closure(struct event_base *base, struct event *ev)
         void *evcb_arg;
 
 	/* reschedule the persistent event if we have a timeout. */
-	if (ev->ev_io_timeout.tv_sec || ev->ev_io_timeout.tv_usec) {
+	if (ev->ev_io_timeout.tv_sec || ev->ev_io_timeout.tv_usec) {/*timer处理，重新加入*/
 		/* If there was a timeout, we want it to run at an interval of
 		 * ev_io_timeout after the last time it was _scheduled_ for,
 		 * not ev_io_timeout after _now_.  If it fired for another
@@ -1599,6 +1602,7 @@ event_persist_closure(struct event_base *base, struct event *ev)
 				relative_to = now;
 			}
 		}
+		/*时间相加：run_at = relative_to + delay*/
 		evutil_timeradd(&relative_to, &delay, &run_at);
 		if (evutil_timercmp(&run_at, &now, <)) {
 			/* Looks like we missed at least one invocation due to
@@ -1606,10 +1610,10 @@ event_persist_closure(struct event_base *base, struct event *ev)
 			 * while, really slow callbacks, or
 			 * something. Reschedule relative to now.
 			 */
-			evutil_timeradd(&now, &delay, &run_at);
+			evutil_timeradd(&now, &delay, &run_at);/*更新为run_at = now + delay*/
 		}
 		run_at.tv_usec |= usec_mask;
-		event_add_nolock_(ev, &run_at, 1);
+		event_add_nolock_(ev, &run_at, 1);/*重新添加此event*/
 	}
 
 	// Save our callback before we release the lock
@@ -1745,13 +1749,13 @@ event_process_active_single_queue(struct event_base *base,
 		if (base->event_break)
 			return -1;
 		if (count >= max_to_process)
-			return count;
+			return count;/*超过最大处理数*/
 		if (count && endtime) {
 			struct timeval now;
 			update_time_cache(base);
 			gettime(base, &now);
 			if (evutil_timercmp(&now, endtime, >=))
-				return count;
+				return count;/*执行时间超过endtime，停止执行*/
 		}
 		if (base->event_continue)
 			break;
@@ -1773,28 +1777,28 @@ event_process_active(struct event_base *base)
 	int i, c = 0;
 	const struct timeval *endtime;
 	struct timeval tv;
-	const int maxcb = base->max_dispatch_callbacks;
-	const int limit_after_prio = base->limit_callbacks_after_prio;
+	const int maxcb = base->max_dispatch_callbacks;/*最多处理多少回调*/
+	const int limit_after_prio = base->limit_callbacks_after_prio;/*小于此值的队列索引不进行执行次数与执行时间限制*/
 	if (base->max_dispatch_time.tv_sec >= 0) {
 		update_time_cache(base);
 		gettime(base, &tv);
-		evutil_timeradd(&base->max_dispatch_time, &tv, &tv);
+		evutil_timeradd(&base->max_dispatch_time, &tv, &tv);/*指明此次dispatch执行可使用的最大时间*/
 		endtime = &tv;
 	} else {
 		endtime = NULL;
 	}
 
-	//遍历处理每个队列的事物
+	//遍历处理每个优先队列的事务
 	for (i = 0; i < base->nactivequeues; ++i) {
 		if (TAILQ_FIRST(&base->activequeues[i]) != NULL) {
 			base->event_running_priority = i;
 			activeq = &base->activequeues[i];//出队一个队列
 			if (i < limit_after_prio)
-				//小于limit_after_prio时，全部按顺序处理
+				//队列索引小于limit_after_prio时，不限制执行次数与执行时间
 				c = event_process_active_single_queue(base, activeq,
-				    INT_MAX, NULL);
+				    INT_MAX/*回调数无限制*/, NULL/*无限制时间*/);
 			else
-				//大于limit_after_prio时，最大处理maxcb个
+				//大于limit_after_prio时，限制执行次数maxcb，执行时间endtime
 				c = event_process_active_single_queue(base, activeq,
 				    maxcb, endtime);
 			if (c < 0) {
@@ -1842,7 +1846,7 @@ static void
 event_loopexit_cb(evutil_socket_t fd, short what, void *arg)
 {
 	struct event_base *base = arg;
-	base->event_gotterm = 1;//置event_loop退出
+	base->event_gotterm = 1;//置event_loop退出标记
 }
 
 int
@@ -1935,14 +1939,14 @@ event_loop(int flags)
 int
 event_base_loop(struct event_base *base, int flags)
 {
-	const struct eventop *evsel = base->evsel;
+	const struct eventop *evsel = base->evsel;/*取event后端实现*/
 	struct timeval tv;
 	struct timeval *tv_p;
 	int res, done, retval = 0;
 
 	/* Grab the lock.  We will release it inside evsel.dispatch, and again
 	 * as we invoke user callbacks. */
-	EVBASE_ACQUIRE_LOCK(base, th_base_lock);
+	EVBASE_ACQUIRE_LOCK(base, th_base_lock);/*加锁*/
 
 	if (base->running_loop) {
 		//检查此函数是否已被调用，报错
@@ -1978,19 +1982,19 @@ event_base_loop(struct event_base *base, int flags)
 		}
 
 		if (base->event_break) {
-			break;
+			break;/*需要立即break*/
 		}
 
 		tv_p = &tv;
 		if (!N_ACTIVE_CALLBACKS(base) && !(flags & EVLOOP_NONBLOCK)) {
-			//没有事件需要处理，且flag不含非阻塞标记，则提取下次timeout事件
+			//当前没有事件需要处理，且flag不含非阻塞标记，则提取下次timeout事件
 			timeout_next(base, &tv_p);
 		} else {
 			/*
 			 * if we have active events, we just poll new events
 			 * without waiting.
 			 */
-			//有事件需要处理，则认为超时时间为０
+			//当前有事件需要处理，则认为超时时间为０
 			evutil_timerclear(&tv);
 		}
 
@@ -2002,14 +2006,14 @@ event_base_loop(struct event_base *base, int flags)
 			goto done;
 		}
 
-		//将activelater事件移动到active队列中
+		//将activelater(上轮循环中认为下次循环时需要处理的）事件移动到active队列中
 		event_queue_make_later_events_active(base);
 
 		clear_time_cache(base);
 
 		//事件分发（创建event，并将其挂在链表中）
 		//tv_p是我们能接受的超时时间（其极有可能等于最小的timeout时间）
-		res = evsel->dispatch(base, tv_p);
+		res = evsel->dispatch(base, tv_p/*超时时间*/);
 
 		if (res == -1) {
 			event_debug(("%s: dispatch returned unsuccessfully.",
@@ -2031,7 +2035,7 @@ event_base_loop(struct event_base *base, int flags)
 			    && n != 0)
 				done = 1;
 		} else if (flags & EVLOOP_NONBLOCK)
-			done = 1;
+			done = 1;/*指明不阻塞，则置done退出loop*/
 	}
 	event_debug(("%s: asked to terminate loop.", __func__));
 
@@ -2995,6 +2999,7 @@ event_active_nolock_(struct event *ev, int res, short ncalls)
 		ev->ev_pncalls = NULL;
 	}
 
+	/*事件加入到activate列表*/
 	event_callback_activate_nolock_(base, event_to_event_callback(ev)/*取event callback*/);
 }
 
@@ -3202,7 +3207,7 @@ timeout_next(struct event_base *base, struct timeval **tv_p)
 
 	//检查event指定的timeout时间是否小于now时间（即是否已到期）
 	if (evutil_timercmp(&ev->ev_timeout, &now, <=)) {
-		//已到期，差值为０
+		//已到期，时间差指为０
 		evutil_timerclear(tv);
 		goto out;
 	}
@@ -3238,7 +3243,7 @@ timeout_process(struct event_base *base)
 	//如果小于now,则删除事件，并生成新的事件，并等待触发
 	while ((ev = min_heap_top_(&base->timeheap))) {
 		if (evutil_timercmp(&ev->ev_timeout, &now, >))
-			break;
+			break;/*超时时间在未来*/
 
 		/* delete this event from the I/O queues */
 		event_del_nolock_(ev, EVENT_DEL_NOBLOCK);

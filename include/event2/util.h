@@ -516,6 +516,7 @@ const char *evutil_socket_error_to_string(int errcode);
 #define evutil_timeradd(tvp, uvp, vvp) timeradd((tvp), (uvp), (vvp))
 #define evutil_timersub(tvp, uvp, vvp) timersub((tvp), (uvp), (vvp))
 #else
+/*将tvp,uvp两个时间相加，将结果保存在vvp中*/
 #define evutil_timeradd(tvp, uvp, vvp)					\
 	do {								\
 		(vvp)->tv_sec = (tvp)->tv_sec + (uvp)->tv_sec;		\
@@ -525,6 +526,7 @@ const char *evutil_socket_error_to_string(int errcode);
 			(vvp)->tv_usec -= 1000000;			\
 		}							\
 	} while (0)
+/*将tvp,uvp两个时间相减，将结果保存在vvp中*/
 #define	evutil_timersub(tvp, uvp, vvp)					\
 	do {								\
 		(vvp)->tv_sec = (tvp)->tv_sec - (uvp)->tv_sec;		\

@@ -120,7 +120,7 @@ void
 evsig_set_base_(struct event_base *base)
 {
 	EVSIGBASE_LOCK();
-	evsig_base = base;
+	evsig_base = base;/*记录信号处理base*/
 	evsig_base_n_signals_added = base->sig.ev_n_signals_added;
 	evsig_base_fd = base->sig.ev_signal_pair[1];
 	EVSIGBASE_UNLOCK();
@@ -307,7 +307,7 @@ evsig_add(struct event_base *base, evutil_socket_t evsignal, short old, short ev
 	if (!sig->ev_signal_added) {
 		if (event_add_nolock_(&sig->ev_signal, NULL, 0))
 			goto err;
-		sig->ev_signal_added = 1;
+		sig->ev_signal_added = 1;/*指明有信号添加*/
 	}
 
 	return (0);

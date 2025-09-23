@@ -209,7 +209,7 @@ struct event_once {
 struct event_base {
 	/** Function pointers and other data to describe this event_base's
 	 * backend. */
-	// 获取后端支持的io复用机制（一般来说linux是epoll，对于windows则是iocp）
+	// 获取后端支持的io复用机制（一般来说linux是epoll（采用epollops），对于windows则是iocp）
 	const struct eventop *evsel;
 	/** Pointer to backend-specific data. */
 	//由evsel进行初始化后生成的私有数据
@@ -240,9 +240,9 @@ struct event_base {
 
 	/** Set if we should terminate the loop once we're done processing
 	 * events. */
-	int event_gotterm;//指明停止事件处理loop
+	int event_gotterm;//此标记指明停止事件处理loop
 	/** Set if we should terminate the loop immediately */
-	//立即跳出事件处理
+	//立即跳出事件处理（由函数event_base_loopbreak设置）
 	int event_break;
 	/** Set if we should start a new instance of the loop immediately. */
 	int event_continue;
@@ -266,12 +266,12 @@ struct event_base {
 	 * that have triggered, and whose callbacks need to be called).  Low
 	 * priority numbers are more important, and stall higher ones.
 	 */
-	struct evcallback_list *activequeues;//队列
+	struct evcallback_list *activequeues;//优先队列（高优的序号小）
 	/** The length of the activequeues array */
-	int nactivequeues;//队列数目
+	int nactivequeues;//队列总数目（即activequeues数组大小）
 	/** A list of event_callbacks that should become active the next time
 	 * we process events, but not this time. */
-	struct evcallback_list active_later_queue;
+	struct evcallback_list active_later_queue;/*需要延迟到下次（next loop)处理的事件*/
 
 	/* common timeout logic */
 
@@ -307,9 +307,9 @@ struct event_base {
 #ifndef EVENT__DISABLE_THREAD_SUPPORT
 	/* threading support */
 	/** The thread currently running the event_loop for this base */
-	unsigned long th_owner_id;
+	unsigned long th_owner_id;/*线程id*/
 	/** A lock to prevent conflicting accesses to this event_base */
-	void *th_base_lock;
+	void *th_base_lock;/*每个线程加此锁*/
 	/** A condition that gets signalled when we're done processing an
 	 * event with waiters on it. */
 	void *current_event_cond;
@@ -329,7 +329,7 @@ struct event_base {
 
 	struct timeval max_dispatch_time;
 	int max_dispatch_callbacks;
-	int limit_callbacks_after_prio;
+	int limit_callbacks_after_prio;/*小于此值的队列索引不进行执行次数与执行时间限制*/
 
 	/* Notify main thread to wake up break, etc. */
 	/** True if the base already has a pending notify, and we don't need
@@ -365,9 +365,9 @@ struct event_config {
 	TAILQ_HEAD(event_configq, event_config_entry) entries;
 
 	int n_cpus_hint;
-	struct timeval max_dispatch_interval;
+	struct timeval max_dispatch_interval;/*最大dispatch执行时间*/
 	int max_dispatch_callbacks;
-	int limit_callbacks_after_prio;
+	int limit_callbacks_after_prio;/*小于此值时执行队列不限制时间及执行次数*/
 	enum event_method_feature require_features;
 	enum event_base_config_flag flags;
 };

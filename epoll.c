@@ -119,7 +119,7 @@ const struct eventop epollops = {
 	epoll_init,
 	epoll_nochangelist_add,
 	epoll_nochangelist_del,
-	epoll_dispatch,
+	epoll_dispatch,/*epoll的分发函数*/
 	epoll_dealloc,
 	1, /* need reinit */
 	EV_FEATURE_ET|EV_FEATURE_O1|EV_FEATURE_EARLY_CLOSE,
@@ -413,13 +413,13 @@ epoll_nochangelist_del(struct event_base *base, evutil_socket_t fd,
 static int
 epoll_dispatch(struct event_base *base, struct timeval *tv)
 {
-	struct epollop *epollop = base->evbase;
+	struct epollop *epollop = base->evbase;/*取epoll私有结构*/
 	struct epoll_event *events = epollop->events;
 	int i, res;
 	long timeout = -1;
 
 #ifdef USING_TIMERFD
-	if (epollop->timerfd >= 0) {
+	if (epollop->timerfd >= 0) {/*timer fd处理*/
 		struct itimerspec is;
 		is.it_interval.tv_sec = 0;
 		is.it_interval.tv_nsec = 0;
@@ -446,7 +446,7 @@ epoll_dispatch(struct event_base *base, struct timeval *tv)
 	} else
 #endif
 	if (tv != NULL) {
-		timeout = evutil_tv_to_msec_(tv);
+		timeout = evutil_tv_to_msec_(tv);/*将tv转换为ms*/
 		if (timeout < 0 || timeout > MAX_EPOLL_TIMEOUT_MSEC) {
 			/* Linux kernels can wait forever if the timeout is
 			 * too big; see comment on MAX_EPOLL_TIMEOUT_MSEC. */
@@ -459,7 +459,7 @@ epoll_dispatch(struct event_base *base, struct timeval *tv)
 
 	EVBASE_RELEASE_LOCK(base, th_base_lock);
 
-	res = epoll_wait(epollop->epfd, events, epollop->nevents, timeout);
+	res = epoll_wait(epollop->epfd, events, epollop->nevents, timeout);/*等待事件*/
 
 	EVBASE_ACQUIRE_LOCK(base, th_base_lock);
 
@@ -475,6 +475,7 @@ epoll_dispatch(struct event_base *base, struct timeval *tv)
 	event_debug(("%s: epoll_wait reports %d", __func__, res));
 	EVUTIL_ASSERT(res <= epollop->nevents);
 
+	/*取返回的事件数*/
 	for (i = 0; i < res; i++) {
 		int what = events[i].events;
 		short ev = 0;
